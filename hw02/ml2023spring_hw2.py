@@ -232,6 +232,7 @@ hidden_dim = 128            # the hidden dim
 
 rnn_block = True            # the model type
 reload_model = False        # reload model to do further epoch training      
+early_stop = 20      # early stop if no improvement
 
 same_seeds(seed)
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -274,6 +275,7 @@ def train():
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
     best_acc = 0.0
+    early_stop_count = 0
     for epoch in range(num_epoch):
         train_acc = 0.0
         train_loss = 0.0
@@ -320,6 +322,14 @@ def train():
             best_acc = val_acc
             torch.save(model.state_dict(), model_path)
             print(f'saving model with acc {best_acc/len(val_set):.5f}')
+            early_stop_count = 0
+        else:
+            early_stop_count += 1
+
+        if early_stop_count >= early_stop:
+            print('\nModel is not improving, so we halt the training session.')
+            break
+
 
     del train_set, val_set
     del train_loader, val_loader
@@ -377,6 +387,7 @@ def parse_parameters():
     global hidden_dim   
     global rnn_model   
     global reload_model
+    global early_stop
 
     parser = configargparse.ArgumentParser()
 
@@ -385,6 +396,7 @@ def parse_parameters():
     parser.add_argument("--batch_size", type=int, default=batch_size,  help='batch size')
     parser.add_argument("--num_epoch", type=int, default=num_epoch,  help='the number of training epoch')
     parser.add_argument("--learning_rate", type=float, default=learning_rate, help='learning rate')
+    parser.add_argument("--early_stop", type=int, default=early_stop,  help='early_stop times')
 
     # model prarameters
     parser.add_argument("--hidden_layers", type=int, default=hidden_layers,  help='the number of hidden layers')
@@ -406,6 +418,7 @@ def parse_parameters():
     hidden_dim = args.hidden_dim
     rnn_block = not args.basic_block
     reload_model = args.reload_model
+    early_stop = args.early_stop
 
 if __name__ == '__main__':
     parse_parameters()
