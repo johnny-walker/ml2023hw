@@ -209,7 +209,8 @@ class Classifier(nn.Module):
         
         return x
 
-"""# Hyper-parameters"""
+
+# Hyper-parameters
 
 # data prarameters
 # TODO: change the value of "concat_nframes" for medium baseline
@@ -226,127 +227,178 @@ model_path = './model.ckpt'  # the path where the checkpoint will be saved
 # model parameters
 # TODO: change the value of "hidden_layers" or "hidden_dim" for medium baseline
 input_dim = 39 * concat_nframes  # the input dim of the model, you should not change the value
-hidden_layers = 1          # the number of hidden layers
-hidden_dim = 128           # the hidden dim
+hidden_layers = 2          # the number of hidden layers
+hidden_dim = 128            # the hidden dim
+rnn_block = True           # the model type
 
-"""# Dataloader"""
-
-from torch.utils.data import DataLoader
-import gc
 
 same_seeds(seed)
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print(f'DEVICE: {device}')
 
-# preprocess data
-train_X, train_y = preprocess_data(split='train', feat_dir='./libriphone/feat', phone_path='./libriphone', concat_nframes=concat_nframes, train_ratio=train_ratio, random_seed=seed)
-val_X, val_y = preprocess_data(split='val', feat_dir='./libriphone/feat', phone_path='./libriphone', concat_nframes=concat_nframes, train_ratio=train_ratio, random_seed=seed)
+from torch.utils.data import DataLoader
+import gc
 
-# get dataset
-train_set = LibriDataset(train_X, train_y)
-val_set = LibriDataset(val_X, val_y)
+def train():
+    print(f"concat_nframes:{concat_nframes}, input_dim:{input_dim}, batch_size:{batch_size}, hidden_layers:{hidden_layers}, hidden_dim:{hidden_dim}")
 
-# remove raw feature to save memory
-del train_X, train_y, val_X, val_y
-gc.collect()
+    """# Dataloader"""
+    # preprocess data
+    train_X, train_y = preprocess_data(split='train', feat_dir='./libriphone/feat', phone_path='./libriphone', concat_nframes=concat_nframes, train_ratio=train_ratio, random_seed=seed)
+    val_X, val_y = preprocess_data(split='val', feat_dir='./libriphone/feat', phone_path='./libriphone', concat_nframes=concat_nframes, train_ratio=train_ratio, random_seed=seed)
 
-# get dataloader
-train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
-val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False)
+    # get dataset
+    train_set = LibriDataset(train_X, train_y)
+    val_set = LibriDataset(val_X, val_y)
 
-"""# Training"""
+    # remove raw feature to save memory
+    del train_X, train_y, val_X, val_y
+    gc.collect()
 
-# create model, define a loss function, and optimizer
-model = Classifier(input_dim=input_dim, hidden_layers=hidden_layers, hidden_dim=hidden_dim, rnn_block=True).to(device)
-criterion = nn.CrossEntropyLoss() 
-optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    # get dataloader
+    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False)
 
-best_acc = 0.0
-for epoch in range(num_epoch):
-    train_acc = 0.0
-    train_loss = 0.0
-    val_acc = 0.0
-    val_loss = 0.0
-    
-    # training
-    model.train() # set the model to training mode
-    for i, batch in enumerate(tqdm(train_loader)):
-        features, labels = batch
-        features = features.to(device)
-        labels = labels.to(device)
+    """# Training"""
+
+    # create model, define a loss function, and optimizer
+    model = Classifier(input_dim=input_dim, hidden_layers=hidden_layers, hidden_dim=hidden_dim, rnn_block=rnn_block).to(device)
+    criterion = nn.CrossEntropyLoss() 
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+
+    best_acc = 0.0
+    for epoch in range(num_epoch):
+        train_acc = 0.0
+        train_loss = 0.0
+        val_acc = 0.0
+        val_loss = 0.0
         
-        optimizer.zero_grad() 
-        outputs = model(features) 
-        
-        loss = criterion(outputs, labels)
-        loss.backward() 
-        optimizer.step() 
-        
-        _, train_pred = torch.max(outputs, 1) # get the index of the class with the highest probability
-        train_acc += (train_pred.detach() == labels.detach()).sum().item()
-        train_loss += loss.item()
-    
-    # validation
-    model.eval() # set the model to evaluation mode
-    with torch.no_grad():
-        for i, batch in enumerate(tqdm(val_loader)):
+        # training
+        model.train() # set the model to training mode
+        for i, batch in enumerate(tqdm(train_loader)):
             features, labels = batch
             features = features.to(device)
             labels = labels.to(device)
-            outputs = model(features)
             
-            loss = criterion(outputs, labels) 
+            optimizer.zero_grad() 
+            outputs = model(features) 
             
-            _, val_pred = torch.max(outputs, 1) 
-            val_acc += (val_pred.cpu() == labels.cpu()).sum().item() # get the index of the class with the highest probability
-            val_loss += loss.item()
+            loss = criterion(outputs, labels)
+            loss.backward() 
+            optimizer.step() 
+            
+            _, train_pred = torch.max(outputs, 1) # get the index of the class with the highest probability
+            train_acc += (train_pred.detach() == labels.detach()).sum().item()
+            train_loss += loss.item()
+        
+        # validation
+        model.eval() # set the model to evaluation mode
+        with torch.no_grad():
+            for i, batch in enumerate(tqdm(val_loader)):
+                features, labels = batch
+                features = features.to(device)
+                labels = labels.to(device)
+                outputs = model(features)
+                
+                loss = criterion(outputs, labels) 
+                
+                _, val_pred = torch.max(outputs, 1) 
+                val_acc += (val_pred.cpu() == labels.cpu()).sum().item() # get the index of the class with the highest probability
+                val_loss += loss.item()
 
-    print(f'[{epoch+1:03d}/{num_epoch:03d}] Train Acc: {train_acc/len(train_set):3.5f} Loss: {train_loss/len(train_loader):3.5f} | Val Acc: {val_acc/len(val_set):3.5f} loss: {val_loss/len(val_loader):3.5f}')
+        print(f'[{epoch+1:03d}/{num_epoch:03d}] Train Acc: {train_acc/len(train_set):3.5f} Loss: {train_loss/len(train_loader):3.5f} | Val Acc: {val_acc/len(val_set):3.5f} loss: {val_loss/len(val_loader):3.5f}')
 
-    # if the model improves, save a checkpoint at this epoch
-    if val_acc > best_acc:
-        best_acc = val_acc
-        torch.save(model.state_dict(), model_path)
-        print(f'saving model with acc {best_acc/len(val_set):.5f}')
+        # if the model improves, save a checkpoint at this epoch
+        if val_acc > best_acc:
+            best_acc = val_acc
+            torch.save(model.state_dict(), model_path)
+            print(f'saving model with acc {best_acc/len(val_set):.5f}')
 
-del train_set, val_set
-del train_loader, val_loader
-gc.collect()
+    del train_set, val_set
+    del train_loader, val_loader
+    gc.collect()
+
 
 """# Testing
 Create a testing dataset, and load model from the saved checkpoint.
 """
+def testing():
+    # load data
+    test_X = preprocess_data(split='test', feat_dir='./libriphone/feat', phone_path='./libriphone', concat_nframes=concat_nframes)
+    test_set = LibriDataset(test_X, None)
+    test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False)
 
-# load data
-test_X = preprocess_data(split='test', feat_dir='./libriphone/feat', phone_path='./libriphone', concat_nframes=concat_nframes)
-test_set = LibriDataset(test_X, None)
-test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False)
+    # load model
+    model = Classifier(input_dim=input_dim, hidden_layers=hidden_layers, hidden_dim=hidden_dim, rnn_block=rnn_block).to(device)
+    model.load_state_dict(torch.load(model_path))
 
-# load model
-model = Classifier(input_dim=input_dim, hidden_layers=hidden_layers, hidden_dim=hidden_dim, rnn_block=True).to(device)
-model.load_state_dict(torch.load(model_path))
+    """Make prediction."""
 
-"""Make prediction."""
+    pred = np.array([], dtype=np.int32)
 
-pred = np.array([], dtype=np.int32)
+    model.eval()
+    with torch.no_grad():
+        for i, batch in enumerate(tqdm(test_loader)):
+            features = batch
+            features = features.to(device)
 
-model.eval()
-with torch.no_grad():
-    for i, batch in enumerate(tqdm(test_loader)):
-        features = batch
-        features = features.to(device)
+            outputs = model(features)
 
-        outputs = model(features)
+            _, test_pred = torch.max(outputs, 1) # get the index of the class with the highest probability
+            pred = np.concatenate((pred, test_pred.cpu().numpy()), axis=0)
 
-        _, test_pred = torch.max(outputs, 1) # get the index of the class with the highest probability
-        pred = np.concatenate((pred, test_pred.cpu().numpy()), axis=0)
+    """Write prediction to a CSV file.
 
-"""Write prediction to a CSV file.
+    After finish running this block, download the file `prediction.csv` from the files section on the left-hand side and submit it to Kaggle.
+    """
 
-After finish running this block, download the file `prediction.csv` from the files section on the left-hand side and submit it to Kaggle.
-"""
+    with open('prediction.csv', 'w') as f:
+        f.write('Id,Class\n')
+        for i, y in enumerate(pred):
+            f.write('{},{}\n'.format(i, y))
 
-with open('prediction.csv', 'w') as f:
-    f.write('Id,Class\n')
-    for i, y in enumerate(pred):
-        f.write('{},{}\n'.format(i, y))
+
+import configargparse
+
+def parse_parameters():
+    global concat_nframes   
+    global input_dim   
+    global batch_size   
+    global num_epoch   
+    global learning_rate   
+    global hidden_layers   
+    global hidden_dim   
+    global rnn_model   
+
+    parser = configargparse.ArgumentParser()
+
+    # data prarameters
+    parser.add_argument("--concat_nframes", type=int, default=concat_nframes,  help='concat frames, n must be odd (total 2k+1 = n frames)')
+    parser.add_argument("--batch_size", type=int, default=batch_size,  help='batch size')
+    parser.add_argument("--num_epoch", type=int, default=num_epoch,  help='the number of training epoch')
+    parser.add_argument("--learning_rate", type=float, default=learning_rate, help='learning rate')
+
+    # model prarameters
+    parser.add_argument("--hidden_layers", type=int, default=hidden_layers,  help='the number of hidden layers')
+    parser.add_argument("--hidden_dim", type=int, default=hidden_dim,  help='the hidden dim')
+    parser.add_argument("--basic_block", action='store_true', help='the model type, defaut rnn')
+
+    args = parser.parse_args()
+
+    # assgin to global variables
+    concat_nframes = args.concat_nframes
+    input_dim = 39*concat_nframes
+
+    batch_size = args.batch_size
+    num_epoch = args.num_epoch
+    learning_rate = args.learning_rate
+
+    hidden_layers = args.hidden_layers
+    hidden_dim = args.hidden_dim
+    rnn_block = not args.basic_block
+
+
+if __name__ == '__main__':
+    parse_parameters()
+    train()
+    testing()
