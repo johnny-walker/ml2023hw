@@ -168,10 +168,9 @@ class RNNBlock(nn.Module):
     def __init__(self, input_dim, hidden_dim=64, num_layers=1):
         super(RNNBlock, self).__init__()
 
-        self.block = nn.RNN(input_size=input_dim, 
+        self.block = nn.GRU(input_size=input_dim, 
                             hidden_size=hidden_dim, 
                             num_layers=num_layers, 
-                            nonlinearity='tanh', 
                             batch_first=True, 
                             dropout=0.0,
                             bidirectional=False )
@@ -214,12 +213,12 @@ class Classifier(nn.Module):
 
 # data prarameters
 # TODO: change the value of "concat_nframes" for medium baseline
-concat_nframes = 1   # the number of frames to concat with, n must be odd (total 2k+1 = n frames)
+concat_nframes = 5   # the number of frames to concat with, n must be odd (total 2k+1 = n frames)
 train_ratio = 0.75   # the ratio of data used for training, the rest will be used for validation
 
 # training parameters
 seed = 1213          # random seed
-batch_size = 16        # batch size
+batch_size = 64        # batch size
 num_epoch = 10         # the number of training epoch
 learning_rate = 1e-4      # learning rate
 model_path = './model.ckpt'  # the path where the checkpoint will be saved
@@ -228,7 +227,7 @@ model_path = './model.ckpt'  # the path where the checkpoint will be saved
 # TODO: change the value of "hidden_layers" or "hidden_dim" for medium baseline
 input_dim = 39 * concat_nframes  # the input dim of the model, you should not change the value
 hidden_layers = 1          # the number of hidden layers
-hidden_dim = 64           # the hidden dim
+hidden_dim = 128           # the hidden dim
 
 """# Dataloader"""
 
@@ -324,7 +323,7 @@ test_set = LibriDataset(test_X, None)
 test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False)
 
 # load model
-model = Classifier(input_dim=input_dim, hidden_layers=hidden_layers, hidden_dim=hidden_dim).to(device)
+model = Classifier(input_dim=input_dim, hidden_layers=hidden_layers, hidden_dim=hidden_dim, rnn_block=True).to(device)
 model.load_state_dict(torch.load(model_path))
 
 """Make prediction."""
