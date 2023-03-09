@@ -240,7 +240,9 @@ from torch.utils.data import DataLoader
 import gc
 
 def train():
-    print(f"concat_nframes:{concat_nframes}, input_dim:{input_dim}, batch_size:{batch_size}, hidden_layers:{hidden_layers}, hidden_dim:{hidden_dim}")
+    print(f"concat_nframes:{concat_nframes}, train_ratio:{train_ratio}")
+    print(f"batch_size:{batch_size}, num_epoch:{num_epoch}, learning_rate:{learning_rate}")
+    print(f"input_dim:{input_dim}, hidden_layers:{hidden_layers}, hidden_dim:{hidden_dim}, rnn_block{rnn_block}")
 
     """# Dataloader"""
     # preprocess data
