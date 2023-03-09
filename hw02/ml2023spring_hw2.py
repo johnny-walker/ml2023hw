@@ -229,8 +229,9 @@ model_path = './model.ckpt'  # the path where the checkpoint will be saved
 input_dim = 39 * concat_nframes  # the input dim of the model, you should not change the value
 hidden_layers = 2          # the number of hidden layers
 hidden_dim = 128            # the hidden dim
-rnn_block = True           # the model type
 
+rnn_block = True            # the model type
+reload_model = False        # reload model to do further epoch training      
 
 same_seeds(seed)
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -240,9 +241,9 @@ from torch.utils.data import DataLoader
 import gc
 
 def train():
-    print(f"concat_nframes:{concat_nframes}, train_ratio:{train_ratio}")
-    print(f"batch_size:{batch_size}, num_epoch:{num_epoch}, learning_rate:{learning_rate}")
-    print(f"input_dim:{input_dim}, hidden_layers:{hidden_layers}, hidden_dim:{hidden_dim}, rnn_block{rnn_block}")
+    print(f"[train] concat_nframes:{concat_nframes}, input_dim:{input_dim}, train_ratio:{train_ratio}")
+    print(f"[train] batch_size:{batch_size}, num_epoch:{num_epoch}, learning_rate:{learning_rate}")
+    print(f"[train] hidden_layers:{hidden_layers}, hidden_dim:{hidden_dim}, rnn_block:{rnn_block}")
 
     """# Dataloader"""
     # preprocess data
@@ -265,6 +266,10 @@ def train():
 
     # create model, define a loss function, and optimizer
     model = Classifier(input_dim=input_dim, hidden_layers=hidden_layers, hidden_dim=hidden_dim, rnn_block=rnn_block).to(device)
+    if reload_model and os.path.exists(model_path):    
+        print(f"[train] reload model parameters, model_path:{model_path}")
+        model.load_state_dict(torch.load(model_path))
+
     criterion = nn.CrossEntropyLoss() 
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
@@ -371,6 +376,7 @@ def parse_parameters():
     global hidden_layers   
     global hidden_dim   
     global rnn_model   
+    global reload_model
 
     parser = configargparse.ArgumentParser()
 
@@ -384,6 +390,7 @@ def parse_parameters():
     parser.add_argument("--hidden_layers", type=int, default=hidden_layers,  help='the number of hidden layers')
     parser.add_argument("--hidden_dim", type=int, default=hidden_dim,  help='the hidden dim')
     parser.add_argument("--basic_block", action='store_true', help='the model type, defaut rnn')
+    parser.add_argument("--reload_model", action='store_true', help='reload the model to do further epoch training')
 
     args = parser.parse_args()
 
@@ -398,7 +405,7 @@ def parse_parameters():
     hidden_layers = args.hidden_layers
     hidden_dim = args.hidden_dim
     rnn_block = not args.basic_block
-
+    reload_model = args.reload_model
 
 if __name__ == '__main__':
     parse_parameters()
